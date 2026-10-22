@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}Category Sales Analysis{% endblock %}
+{% block page_title %}Category Sales Analysis{% endblock %}
+{% block page_subtitle %}SQL concepts: JOIN · GROUP BY · HAVING · COUNT · SUM · AVG{% endblock %}
+
+{% block content %}
+<section class="card">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title">Category Sales Dashboard</h3>
+            <p class="card-subtitle">Aggregated metrics with category-level filtering</p>
+        </div>
+        <div class="sql-tag"><i class="fas fa-database"></i> JOIN · GROUP BY · HAVING</div>
+    </div>
+
+    <!-- SQL Preview -->
+    <div class="sql-preview">
+        <div class="sql-preview-header"><i class="fas fa-code"></i> Executed SQL Query</div>
+        <pre>{{ sql_query }}</pre>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+        <div class="filter-group">
+            <label>Category Filter</label>
+            <select id="categoryFilter" class="select-input">
+                <option value="all">All Categories</option>
+                {% for c in categories %}
+                <option value="{{ c.category_name }}">{{ c.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</section>
+
+<!-- Charts -->
+<section class="two-col-grid">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Revenue by Category</h3>
+        </div>
+        <div class="chart-container">
+            <canvas id="catRevenueChart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Order Count by Category</h3>
+        </div>
+        <div class="chart-container">
+            <canvas id="catOrdersChart"></canvas>
+        </div>
+    </div>
+</section>
+
+<!-- Table -->
+<section class="card">
+    <div class="card-header">
+        <h3 class="card-title">Category-Level Metrics</h3>
+    </div>
+    <div class="table-wrapper">
+        <table class="data-table" id="catSalesTable">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th class="text-right">COUNT (Orders)</th>
+                    <th class="text-right">SUM (Revenue)</th>
+                    <th class="text-right">AVG (Order Value)</th>
+                    <th>Performance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in categories %}
+                <tr data-category="{{ c.category_name }}">
+                    <td><strong>{{ c.category_name }}</strong></td>
+                    <td class="text-right">{{ c.total_orders | format_number }}</td>
+                    <td class="text-right">{{ c.total_revenue | format_currency }}</td>
+                    <td class="text-right">{{ c.average_order_value | format_currency }}</td>
+                    <td>
+                        <div class="performance-bar">
+                            <div class="fill" style="width:{{ c.revenue_share_pct }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const cats = {{ categories | tojson }};
+    const maxRev = Math.max(...cats.map(c => c.total_revenue));
+    const maxOrd = Math.max(...cats.map(c => c.total_orders));
+
+    const revenueChart = new Chart(document.getElementById('catRevenueChart'), {
+        type: 'bar',
+        data: {
+            labels: cats.map(c => c.category_name),
+            datasets: [{ label: 'Revenue', data: cats.map(c => c.total_revenue), backgroundColor: '#6366f1', borderRadius: 6 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#cbd5e1', font: { size: 10 } } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+
+    const ordersChart = new Chart(document.getElementById('catOrdersChart'), {
+        type: 'bar',
+        data: {
+            labels: cats.map(c => c.category_name),
+            datasets: [{ label: 'Orders', data: cats.map(c => c.total_orders), backgroundColor: '#f59e0b', borderRadius: 6 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#cbd5e1', font: { size: 10 } } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+
+    document.getElementById('categoryFilter').addEventListener('change', function() {
+        const cat = this.value;
+        let visibleCats = [];
+        
+        document.querySelectorAll('#catSalesTable tbody tr').forEach(row => {
+            const match = cat === 'all' || row.dataset.category === cat;
+            row.style.display = match ? '' : 'none';
+            if (match) {
+                visibleCats.push(cats.find(c => c.category_name === row.dataset.category));
+            }
+        });
+
+        revenueChart.data.labels = visibleCats.map(c => c.category_name);
+        revenueChart.data.datasets[0].data = visibleCats.map(c => c.total_revenue);
+        revenueChart.update();
+
+        ordersChart.data.labels = visibleCats.map(c => c.category_name);
+        ordersChart.data.datasets[0].data = visibleCats.map(c => c.total_orders);
+        ordersChart.update();
+    });
+</script>
+{% endblock %}
